@@ -9,6 +9,7 @@ const Io = std.Io;
 
 const services_dir = "services";
 const lists_dir = "lists";
+const list_suffixes = [_][]const u8{ "_domains.json", "_ipv4_cidr.json" };
 
 // note: Accommodate large lists while bounding one HTTP response.
 const max_response_bytes = 8 * 1024 * 1024;
@@ -39,8 +40,8 @@ pub fn collect(
         service_names[index] = name;
         try collectService(allocator, io, &client, name, filename);
     }
-    try files.removeUnlistedDirectories(allocator, io, lists_dir, service_names);
-    try formats.removeUnlistedServices(allocator, io, service_names);
+    try files.pruneStaleGeneratedFiles(allocator, io, lists_dir, service_names, &list_suffixes);
+    try formats.pruneStaleGeneratedFiles(allocator, io, service_names);
 }
 
 fn collectService(
@@ -91,12 +92,8 @@ fn collectService(
     if (domains.items.len == 0) return error.EmptyDomainList;
     if (cidrs.items.len == 0) return error.EmptyIpv4CidrList;
 
-    const domain_path = try std.fs.path.join(service_allocator, &.{
-        lists_dir, name, "domains.json",
-    });
-    const cidr_path = try std.fs.path.join(service_allocator, &.{
-        lists_dir, name, "ipv4_cidr.json",
-    });
+    const domain_path = try listPath(service_allocator, name, "domains");
+    const cidr_path = try listPath(service_allocator, name, "ipv4_cidr");
     try json.writeAtomic(io, domain_path, domains.items);
     try json.writeAtomic(io, cidr_path, cidrs.items);
     try formats.writeAll(
@@ -109,6 +106,12 @@ fn collectService(
     std.log.info("wrote {s}: {d} domain suffixes, {d} IPv4 CIDRs", .{
         name, domains.items.len, cidrs.items.len,
     });
+}
+
+fn listPath(allocator: Allocator, service: []const u8, kind: []const u8) ![]u8 {
+    const filename = try std.fmt.allocPrint(allocator, "{s}_{s}.json", .{ service, kind });
+    defer allocator.free(filename);
+    return std.fs.path.join(allocator, &.{ lists_dir, filename });
 }
 
 fn appendJsonList(

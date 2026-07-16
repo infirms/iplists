@@ -9,24 +9,16 @@ const Io = std.Io;
 const max_process_output_bytes = 256 * 1024;
 
 pub fn compile(allocator: Allocator, io: Io) !void {
-    const services = try files.listEntries(allocator, io, format.output_dir, .directory, "");
-    defer files.freeStrings(allocator, services);
-    if (services.len == 0) return error.NoRenderedLists;
+    const sources = try files.listEntries(allocator, io, format.output_dir, .file, ".json");
+    defer files.freeStrings(allocator, sources);
+    if (sources.len == 0) return error.NoRenderedLists;
 
-    for (services) |service| try compileService(allocator, io, service);
+    for (sources) |filename| try compileFile(allocator, io, filename);
 }
 
-fn compileService(allocator: Allocator, io: Io, service: []const u8) !void {
-    for ([_][]const u8{ format.domains_filename, format.ipv4_filename }) |filename| {
-        try compileFile(allocator, io, service, filename);
-    }
-    std.log.info("compiled {s}", .{service});
-}
-
-fn compileFile(allocator: Allocator, io: Io, service: []const u8, filename: []const u8) !void {
+fn compileFile(allocator: Allocator, io: Io, filename: []const u8) !void {
     const input_path = try std.fs.path.join(allocator, &.{
         format.output_dir,
-        service,
         filename,
     });
     defer allocator.free(input_path);
@@ -53,4 +45,6 @@ fn compileFile(allocator: Allocator, io: Io, service: []const u8, filename: []co
         },
         else => return error.SingBoxTerminated,
     }
+
+    std.log.info("compiled {s}", .{filename});
 }

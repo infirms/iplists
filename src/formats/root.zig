@@ -16,10 +16,16 @@ pub fn writeAll(
     return sing_box.writeService(allocator, io, service, domains, ipv4_cidrs);
 }
 
-pub fn removeUnlistedServices(
+pub fn pruneStaleGeneratedFiles(
     allocator: Allocator,
     io: Io,
     services: []const []const u8,
 ) !void {
-    return files.removeUnlistedDirectories(allocator, io, sing_box.output_dir, services);
+    return files.pruneStaleGeneratedFiles(
+        allocator,
+        io,
+        sing_box.output_dir,
+        services,
+        &sing_box.output_suffixes,
+    );
 }
