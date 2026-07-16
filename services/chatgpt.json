@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "kind": "domains",
+      "url": "https://iplist.opencck.org/?format=json&data=domains&site=chatgpt.com"
+    },
+    {
+      "kind": "ipv4_cidr",
+      "url": "https://iplist.opencck.org/?format=json&data=cidr4&site=chatgpt.com"
+    }
+  ]
+}
