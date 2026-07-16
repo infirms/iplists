@@ -1,0 +1,5 @@
+.wakatime-project
+/.zig-cache/
+/.zig-global-cache/
+/.tools/
+/zig-out/
