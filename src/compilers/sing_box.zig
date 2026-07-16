@@ -17,10 +17,17 @@ pub fn compile(allocator: Allocator, io: Io) !void {
 }
 
 fn compileService(allocator: Allocator, io: Io, service: []const u8) !void {
+    for ([_][]const u8{ format.domains_filename, format.ipv4_filename }) |filename| {
+        try compileFile(allocator, io, service, filename);
+    }
+    std.log.info("compiled {s}", .{service});
+}
+
+fn compileFile(allocator: Allocator, io: Io, service: []const u8, filename: []const u8) !void {
     const input_path = try std.fs.path.join(allocator, &.{
         format.output_dir,
         service,
-        format.ipv4_filename,
+        filename,
     });
     defer allocator.free(input_path);
 
@@ -46,6 +53,4 @@ fn compileService(allocator: Allocator, io: Io, service: []const u8) !void {
         },
         else => return error.SingBoxTerminated,
     }
-
-    std.log.info("compiled {s}", .{service});
 }

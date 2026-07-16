@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 
 pub const output_dir = "formats/sing-box";
+pub const domains_filename = "domains.json";
 pub const ipv4_filename = "ipv4_cidr.json";
 
 // note: Version 4 is the newest source format supported by sing-box 1.13.x.
@@ -25,7 +26,7 @@ pub fn writeService(
     domains: []const []const u8,
     ipv4_cidrs: []const []const u8,
 ) !void {
-    const domain_path = try std.fs.path.join(allocator, &.{ output_dir, service, "domains.json" });
+    const domain_path = try std.fs.path.join(allocator, &.{ output_dir, service, domains_filename });
     defer allocator.free(domain_path);
     const cidr_path = try std.fs.path.join(allocator, &.{ output_dir, service, ipv4_filename });
     defer allocator.free(cidr_path);
