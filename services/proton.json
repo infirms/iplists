@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "kind": "domains",
+      "url": "https://iplist.opencck.org/?format=json&data=domains&site=proton.me"
+    },
+    {
+      "kind": "ipv4_cidr",
+      "url": "https://iplist.opencck.org/?format=json&data=cidr4&site=proton.me"
+    }
+  ]
+}
