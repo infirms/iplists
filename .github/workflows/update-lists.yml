@@ -63,11 +63,8 @@ jobs:
           test "$(zig version)" = "${ZIG_VERSION}"
           sing-box version | grep -F "sing-box version ${SING_BOX_VERSION}"
 
-      - name: Test
-        run: zig build test -Doptimize=ReleaseSafe
-
-      - name: Build
-        run: zig build -Doptimize=ReleaseSafe
+      - name: Build and test
+        run: zig build ci -Doptimize=ReleaseSafe
 
       - name: Collect lists
         run: ./zig-out/bin/iplists collect
