@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "kind": "domains",
+      "format": "text",
+      "url": "https://iplist.opencck.org/?format=text&data=domains&site=spotify.com"
+    },
+    {
+      "kind": "ipv4_cidr",
+      "format": "text",
+      "url": "https://iplist.opencck.org/?format=text&data=cidr4&site=spotify.com"
+    }
+  ]
+}
