@@ -32,7 +32,6 @@ jobs:
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: ${{ env.ZIG_VERSION }}
-          cache-size-limit: 512
 
       - name: Restore sing-box
         id: sing-box-cache
@@ -65,7 +64,7 @@ jobs:
           sing-box version | grep -F "sing-box version ${SING_BOX_VERSION}"
 
       - name: Test
-        run: zig build test
+        run: zig build test -Doptimize=ReleaseSafe
 
       - name: Build
         run: zig build -Doptimize=ReleaseSafe
