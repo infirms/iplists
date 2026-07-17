@@ -87,7 +87,7 @@ jobs:
             echo "Lists are already up to date."
             exit 0
           fi
-
+          # note: source https://github.com/orgs/community/discussions/119597
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat(iplists): update generated lists"
