@@ -11,8 +11,15 @@ pub const SourceKind = enum {
     ipv6_cidr,
 };
 
+pub const SourceFormat = enum {
+    json,
+    text,
+    comma,
+};
+
 pub const Source = struct {
     kind: SourceKind,
+    format: SourceFormat = .json,
     url: []const u8,
 };
 
@@ -95,4 +102,35 @@ test "IPv6 is reserved but not implemented" {
         .{ .kind = .ipv6_cidr, .url = "https://example.test/cidrs" },
     } };
     try std.testing.expectError(error.UnsupportedSourceKind, service.validate());
+}
+
+test "source format is explicit and defaults to JSON" {
+    const allocator = std.testing.allocator;
+
+    const default = try std.json.parseFromSlice(
+        Source,
+        allocator,
+        "{\"kind\":\"domains\",\"url\":\"https://example.test/domains\"}",
+        .{},
+    );
+    defer default.deinit();
+    try std.testing.expectEqual(SourceFormat.json, default.value.format);
+
+    const text = try std.json.parseFromSlice(
+        Source,
+        allocator,
+        "{\"kind\":\"ipv4_cidr\",\"format\":\"text\",\"url\":\"https://example.test/cidrs\"}",
+        .{},
+    );
+    defer text.deinit();
+    try std.testing.expectEqual(SourceFormat.text, text.value.format);
+
+    const comma = try std.json.parseFromSlice(
+        Source,
+        allocator,
+        "{\"kind\":\"domains\",\"format\":\"comma\",\"url\":\"https://example.test/domains\"}",
+        .{},
+    );
+    defer comma.deinit();
+    try std.testing.expectEqual(SourceFormat.comma, comma.value.format);
 }

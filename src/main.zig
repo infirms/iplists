@@ -56,4 +56,5 @@ test {
     _ = @import("app.zig");
     _ = @import("config.zig");
     _ = @import("files.zig");
+    _ = @import("lists.zig");
 }

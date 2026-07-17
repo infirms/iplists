@@ -2,14 +2,14 @@ const std = @import("std");
 const config = @import("config.zig");
 const files = @import("files.zig");
 const formats = @import("formats/root.zig");
-const json = @import("json.zig");
+const lists = @import("lists.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
+// note: Preserve first-seen order while enforcing exact string uniqueness.
+const UniqueList = std.array_hash_map.String(void);
 
 const services_dir = "services";
-const lists_dir = "lists";
-const list_suffixes = [_][]const u8{ "_domains.json", "_ipv4_cidr.json" };
 
 // note: Accommodate large lists while bounding one HTTP response.
 const max_response_bytes = 8 * 1024 * 1024;
@@ -40,7 +40,7 @@ pub fn collect(
         service_names[index] = name;
         try collectService(allocator, io, &client, name, filename);
     }
-    try files.pruneStaleGeneratedFiles(allocator, io, lists_dir, service_names, &list_suffixes);
+    try lists.pruneStaleGeneratedFiles(allocator, io, service_names);
     try formats.pruneStaleGeneratedFiles(allocator, io, service_names);
 }
 
@@ -70,14 +70,20 @@ fn collectService(
     );
     try service.validate();
 
-    var domains: std.ArrayList([]const u8) = .empty;
-    var cidrs: std.ArrayList([]const u8) = .empty;
+    var domains: UniqueList = .empty;
+    defer domains.deinit(service_allocator);
+    var cidrs: UniqueList = .empty;
+    defer cidrs.deinit(service_allocator);
     const response_storage = try service_allocator.alloc(u8, max_response_bytes);
     var collected_bytes: usize = 0;
 
     for (service.sources) |source| {
-        std.log.info("fetching {s} for {s}", .{ @tagName(source.kind), name });
-        const body = try downloadJson(client, source.url, response_storage);
+        std.log.info("fetching {s} ({s}) for {s}", .{
+            @tagName(source.kind),
+            @tagName(source.format),
+            name,
+        });
+        const body = try download(client, source.url, response_storage);
         collected_bytes = std.math.add(usize, collected_bytes, body.len) catch
             return error.CollectedListsTooLarge;
         if (collected_bytes > max_collected_bytes) return error.CollectedListsTooLarge;
@@ -86,57 +92,70 @@ fn collectService(
             .ipv4_cidr => &cidrs,
             .ipv6_cidr => return error.UnsupportedSourceKind,
         };
-        try appendJsonList(allocator, service_allocator, output, body);
+        switch (source.format) {
+            .json => try appendJsonList(allocator, service_allocator, output, body),
+            .text => try appendDelimitedList(service_allocator, output, body, '\n'),
+            .comma => try appendDelimitedList(service_allocator, output, body, ','),
+        }
     }
 
-    if (domains.items.len == 0) return error.EmptyDomainList;
-    if (cidrs.items.len == 0) return error.EmptyIpv4CidrList;
+    if (domains.count() == 0) return error.EmptyDomainList;
+    if (cidrs.count() == 0) return error.EmptyIpv4CidrList;
 
-    const domain_path = try listPath(service_allocator, name, "domains");
-    const cidr_path = try listPath(service_allocator, name, "ipv4_cidr");
-    try json.writeAtomic(io, domain_path, domains.items);
-    try json.writeAtomic(io, cidr_path, cidrs.items);
+    try lists.writeAll(service_allocator, io, name, domains.keys(), cidrs.keys());
     try formats.writeAll(
         service_allocator,
         io,
         name,
-        domains.items,
-        cidrs.items,
+        domains.keys(),
+        cidrs.keys(),
     );
-    std.log.info("wrote {s}: {d} domain suffixes, {d} IPv4 CIDRs", .{
-        name, domains.items.len, cidrs.items.len,
+    std.log.info("wrote {s}: {d} unique domain suffixes, {d} unique IPv4 CIDRs", .{
+        name, domains.count(), cidrs.count(),
     });
-}
-
-fn listPath(allocator: Allocator, service: []const u8, kind: []const u8) ![]u8 {
-    const filename = try std.fmt.allocPrint(allocator, "{s}_{s}.json", .{ service, kind });
-    defer allocator.free(filename);
-    return std.fs.path.join(allocator, &.{ lists_dir, filename });
 }
 
 fn appendJsonList(
     parse_allocator: Allocator,
     list_allocator: Allocator,
-    output: *std.ArrayList([]const u8),
+    output: *UniqueList,
     json_text: []const u8,
 ) !void {
     const Response = std.json.ArrayHashMap([]const []const u8);
     const parsed = try std.json.parseFromSlice(Response, parse_allocator, json_text, .{});
     defer parsed.deinit();
 
-    const lists = parsed.value.map.values();
-    if (lists.len != 1) return error.InvalidListJson;
-    for (lists[0]) |value| {
-        const copy = try list_allocator.dupe(u8, value);
-        errdefer list_allocator.free(copy);
-        try output.append(list_allocator, copy);
+    const arrays = parsed.value.map.values();
+    if (arrays.len != 1) return error.InvalidListJson;
+    for (arrays[0]) |value| try appendUnique(list_allocator, output, value);
+}
+
+fn appendDelimitedList(
+    allocator: Allocator,
+    output: *UniqueList,
+    text: []const u8,
+    delimiter: u8,
+) !void {
+    var values = std.mem.splitScalar(u8, text, delimiter);
+    while (values.next()) |raw_value| {
+        const value = std.mem.trim(u8, raw_value, &std.ascii.whitespace);
+        if (value.len == 0) continue;
+        try appendUnique(allocator, output, value);
     }
 }
 
-fn downloadJson(client: *std.http.Client, url: []const u8, storage: []u8) ![]const u8 {
+fn appendUnique(allocator: Allocator, output: *UniqueList, value: []const u8) !void {
+    if (output.contains(value)) return;
+
+    const copy = try allocator.dupe(u8, value);
+    errdefer allocator.free(copy);
+    try output.putNoClobber(allocator, copy, {});
+}
+
+fn download(client: *std.http.Client, url: []const u8, storage: []u8) ![]const u8 {
     var retries: usize = 0;
     while (true) {
-        const body = downloadJsonOnce(client, url, storage) catch |err| {
+        const body = downloadOnce(client, url, storage) catch |err| {
             if (err == error.Canceled or retries == max_download_retries) return err;
             retries += 1;
             std.log.warn("download failed for {s}: {s}; retry {d}/{d}", .{
@@ -148,7 +167,7 @@ fn downloadJson(client: *std.http.Client, url: []const u8, storage: []u8) ![]con
     }
 }
 
-fn downloadJsonOnce(client: *std.http.Client, url: []const u8, storage: []u8) ![]const u8 {
+fn downloadOnce(client: *std.http.Client, url: []const u8, storage: []u8) ![]const u8 {
     var body_writer = Io.Writer.fixed(storage);
     const Fetch = union(enum) {
         response: std.http.Client.FetchError!std.http.Client.FetchResult,
@@ -186,23 +205,25 @@ test "provider JSON accepts a single-key string array" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
 
-    var values: std.ArrayList([]const u8) = .empty;
+    var values: UniqueList = .empty;
+    defer values.deinit(arena.allocator());
     try appendJsonList(
         std.testing.allocator,
         arena.allocator(),
         &values,
-        "{\"service\":[\"one\",\"two\"]}",
+        "{\"service\":[\"one\",\"two\",\"one\"]}",
     );
-    try std.testing.expectEqual(@as(usize, 2), values.items.len);
-    try std.testing.expectEqualStrings("one", values.items[0]);
-    try std.testing.expectEqualStrings("two", values.items[1]);
+    try std.testing.expectEqual(@as(usize, 2), values.count());
+    try std.testing.expectEqualStrings("one", values.keys()[0]);
+    try std.testing.expectEqualStrings("two", values.keys()[1]);
 }
 
 test "provider JSON rejects an ambiguous shape" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
 
-    var values: std.ArrayList([]const u8) = .empty;
+    var values: UniqueList = .empty;
+    defer values.deinit(arena.allocator());
     try std.testing.expectError(
         error.InvalidListJson,
         appendJsonList(
@@ -212,4 +233,43 @@ test "provider JSON rejects an ambiguous shape" {
             "{\"a\":[],\"b\":[]}",
         ),
     );
+}
+
+test "text source accepts trimmed LF and CRLF lines" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+
+    var values: UniqueList = .empty;
+    defer values.deinit(arena.allocator());
+    try appendDelimitedList(
+        arena.allocator(),
+        &values,
+        "  192.0.2.0/24\r\n\r\n198.51.100.0/24 \n192.0.2.0/24\n",
+        '\n',
+    );
+    try std.testing.expectEqual(@as(usize, 2), values.count());
+    try std.testing.expectEqualStrings("192.0.2.0/24", values.keys()[0]);
+    try std.testing.expectEqualStrings("198.51.100.0/24", values.keys()[1]);
+}
+
+test "JSON, text, and comma sources deduplicate together in insertion order" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+
+    var values: UniqueList = .empty;
+    defer values.deinit(arena.allocator());
+    try appendJsonList(
+        std.testing.allocator,
+        arena.allocator(),
+        &values,
+        "{\"service\":[\"one\",\"two\"]}",
+    );
+    try appendDelimitedList(arena.allocator(), &values, "two\nthree\n", '\n');
+    try appendDelimitedList(arena.allocator(), &values, " three, four,one ", ',');
+
+    try std.testing.expectEqual(@as(usize, 4), values.count());
+    try std.testing.expectEqualStrings("one", values.keys()[0]);
+    try std.testing.expectEqualStrings("two", values.keys()[1]);
+    try std.testing.expectEqualStrings("three", values.keys()[2]);
+    try std.testing.expectEqualStrings("four", values.keys()[3]);
 }
