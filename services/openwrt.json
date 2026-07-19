@@ -1,0 +1,13 @@
+{
+  "sources": [
+    {
+      "kind": "domains",
+      "format": "text",
+      "url": "https://beta.iplist.opencck.org/?format=text&data=domains&site=openwrt.org"
+    },
+    {
+      "kind": "ipv4_cidr",
+      "format": "text",
+      "url": "https://beta.iplist.opencck.org/?format=text&data=cidr4&site=openwrt.org"
+    }
+  ]
