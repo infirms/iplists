@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=spotify.com"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&wildcard=1&site=spotify.com"
     },
     {
       "kind": "ipv4_cidr",

@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=proton.me"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&wildcard=1&site=proton.me"
     },
     {
       "kind": "ipv4_cidr",

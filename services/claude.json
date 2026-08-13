@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=claude.ai"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&wildcard=1&site=claude.ai"
     },
     {
       "kind": "ipv4_cidr",

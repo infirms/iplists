@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=chatgpt.com"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&wildcard=1&site=chatgpt.com"
     },
     {
       "kind": "ipv4_cidr",

@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=tuta.com"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&wildcard=1&site=tuta.com"
     },
     {
       "kind": "ipv4_cidr",
