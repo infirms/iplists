@@ -15,6 +15,7 @@ pub const SourceFormat = enum {
     json,
     text,
     comma,
+    srs,
 };
 
 pub const Source = struct {
@@ -133,4 +134,13 @@ test "source format is explicit and defaults to JSON" {
     );
     defer comma.deinit();
     try std.testing.expectEqual(SourceFormat.comma, comma.value.format);
+
+    const srs = try std.json.parseFromSlice(
+        Source,
+        allocator,
+        "{\"kind\":\"ipv4_cidr\",\"format\":\"srs\",\"url\":\"https://example.test/cidrs.srs\"}",
+        .{},
+    );
+    defer srs.deinit();
+    try std.testing.expectEqual(SourceFormat.srs, srs.value.format);
 }
