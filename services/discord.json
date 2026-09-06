@@ -3,7 +3,7 @@
     {
       "kind": "domains",
       "format": "text",
-      "url": "https://iplist.opencck.org/?format=text&data=domains&site=discord.gg&site=discord.media&site=discord.com"
+      "url": "https://iplist.opencck.org/?format=text&data=domains&site=discord.com&site=discord.gg&site=discord.media"
     },
     {
       "kind": "ipv4_cidr",
