@@ -3,7 +3,6 @@ name: Update lists
 on:
   workflow_dispatch:
   schedule:
-    # Every six hours.
     - cron: "0 */6 * * *"
 
 permissions:
@@ -14,12 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ZIG_VERSION: "0.16.0"
   SING_BOX_VERSION: "1.13.21"
   SING_BOX_SHA256: "24f9ef8e7234e13e71e74c3598a4164c5fe07b7b67ccc6e96cf68b54789f72cd"
-  IPLISTS_REQUEST_TIMEOUT_MS: "10000"
-  IPLISTS_PROBE_DELAY_MS: "500"
-  IPLISTS_RETRIES: "5"
 
 jobs:
   update:
@@ -31,66 +26,36 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
 
-      - name: Set up Zig
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
-          version: ${{ env.ZIG_VERSION }}
-
-      - name: Restore sing-box
-        id: sing-box-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .tools/sing-box
-          key: sing-box-${{ runner.os }}-${{ runner.arch }}-${{ env.SING_BOX_VERSION }}-${{ env.SING_BOX_SHA256 }}
+          python-version: "3.12"
 
       - name: Install sing-box
-        if: steps.sing-box-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          mkdir -p .tools/sing-box
-
-          sing_box_archive="sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz"
+          archive="sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz"
           curl --fail --show-error --location --retry 3 \
-            --output "${sing_box_archive}" \
-            "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/${sing_box_archive}"
-          printf '%s  %s\n' "${SING_BOX_SHA256}" "${sing_box_archive}" | sha256sum --check
-          tar -xzf "${sing_box_archive}" -C .tools/sing-box --strip-components=1
-          rm -- "${sing_box_archive}"
+            --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/${archive}"
+          printf '%s  %s\n' "$SING_BOX_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/sing-box"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/sing-box" --strip-components=1
+          echo "$RUNNER_TEMP/sing-box" >> "$GITHUB_PATH"
 
-      - name: Add sing-box to PATH
-        run: echo "$GITHUB_WORKSPACE/.tools/sing-box" >> "$GITHUB_PATH"
-
-      - name: Verify tools
-        run: |
-          set -euo pipefail
-          test "$(zig version)" = "${ZIG_VERSION}"
-          sing-box version | grep -F "sing-box version ${SING_BOX_VERSION}"
-
-      - name: Build and test
-        run: zig build ci -Doptimize=ReleaseSafe
-
-      - name: Collect lists
-        run: >-
-          ./zig-out/bin/iplists collect
-          --request-timeout-ms "${IPLISTS_REQUEST_TIMEOUT_MS}"
-          --probe-delay-ms "${IPLISTS_PROBE_DELAY_MS}"
-          --retries "${IPLISTS_RETRIES}"
-
-      - name: Compile rule sets
-        run: ./zig-out/bin/iplists compile
+      - name: Generate rule sets
+        run: python -m iplists
 
       - name: Commit changed lists
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          git add --all -- lists formats
-
+          git add -A -- output/sing-box
           if git diff --cached --quiet; then
             echo "Lists are already up to date."
             exit 0
           fi
-          # note: source https://github.com/orgs/community/discussions/119597
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat(iplists): update generated lists"
